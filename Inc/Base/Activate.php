@@ -15,8 +15,6 @@ class Activate
 
     public static function activate()
     {
-        $xpay_instance = NexiPaymentGateway::getInstance();
-        $xpay_instance->get_profile_info();
         self::set_nexi_unique();
 
         flush_rewrite_rules();

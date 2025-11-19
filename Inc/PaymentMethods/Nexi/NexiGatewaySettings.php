@@ -21,6 +21,8 @@ class NexiGatewaySettings extends BaseGatewaySettings
             $settings = $defaults;
         } else {
             $settings = wp_parse_args($settings, $defaults);
+            $xpay_instance = NexiPaymentGateway::getInstance();
+            $xpay_instance->get_profile_info();
         }
 
         if (is_array($settings)) {
@@ -36,10 +38,6 @@ class NexiGatewaySettings extends BaseGatewaySettings
         return [
             'is_active' => 'no',
             'payment_mode' => 'test', // test or live
-            'test_api_key' => '',
-            'test_secret_key' => '',
-            'live_api_key' => '',
-            'live_secret_key' => '',
             //nexi fields
             'nexi_alias' => '',
             'nexi_mac' => '',
