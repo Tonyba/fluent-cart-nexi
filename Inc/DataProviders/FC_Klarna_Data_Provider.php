@@ -52,7 +52,7 @@ class FC_Klarna_Data_Provider
                 $itemsNumber++;
 
                 $params['Item_quantity_' . $itemsNumber] = $item->quantity;
-                $params['Item_amount_' . $itemsNumber] = FC_Nexi_Helper::mul_bcmul($item->unit_price, 100, 0);
+                $params['Item_amount_' . $itemsNumber] = FC_Nexi_Helper::mul_bcmul($item->unit_price, 1, 0);
                 $params['Item_name_' . $itemsNumber] = self::escapeKlarnaSpecialCharacters($item->title);
 
                 $itemsAmountCalculated += $item->unit_price * $item->quantity;
@@ -64,7 +64,7 @@ class FC_Klarna_Data_Provider
                 $itemsNumber++;
 
                 $params['Item_quantity_' . $itemsNumber] = 1;
-                $params['Item_amount_' . $itemsNumber] = FC_Nexi_Helper::mul_bcmul($extraFee, 100, 0);
+                $params['Item_amount_' . $itemsNumber] = FC_Nexi_Helper::mul_bcmul($extraFee, 1, 0);
                 $params['Item_name_' . $itemsNumber] = self::escapeKlarnaSpecialCharacters("Extra Fee");
             }
 
@@ -99,7 +99,7 @@ class FC_Klarna_Data_Provider
             $params['Bill_name'] = $billing_first_name;
             $params['Bill_surname'] = $billing_last_name;
         } catch (Exception $exc) {
-            //  Log::actionWarning($exc->getMessage());
+            error_log($exc->getMessage());
         }
 
         return $params;

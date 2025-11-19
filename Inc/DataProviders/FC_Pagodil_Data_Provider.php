@@ -44,7 +44,7 @@ class FC_Pagodil_Data_Provider
             $params['nome'] = $billing_first_name;
             $params['cognome'] = $billing_last_name;
 
-            $params['itemsAmount'] = FC_Nexi_Helper::mul_bcmul($order->total_amount, 100, 0);
+            $params['itemsAmount'] = FC_Nexi_Helper::mul_bcmul($order->total_amount, 1, 0);
 
             $allItems = $order->order_items;
 
@@ -55,7 +55,7 @@ class FC_Pagodil_Data_Provider
 
                 $params['Item_code_' . $itemsNumber] = $item->post_id;
                 $params['Item_quantity_' . $itemsNumber] = $item->quantity;
-                $params['Item_amount_' . $itemsNumber] = FC_Nexi_Helper::mul_bcmul($item->line_total, 100, 0);
+                $params['Item_amount_' . $itemsNumber] = FC_Nexi_Helper::mul_bcmul($item->line_total, 1, 0);
                 $params['Item_description_' . $itemsNumber] = $item->title;
 
                 $categoryIds = wp_get_post_terms($item->post_id, 'product-categories', ['fields' => 'ids']);
@@ -126,7 +126,7 @@ class FC_Pagodil_Data_Provider
                 $params['destinationNameIndicator'] = FC_3DS20_Data_Provider::get3ds20CheckName($user, $shipping_first_name, $shipping_last_name);
             }
         } catch (Exception $exc) {
-            //   Log::actionWarning($exc->getMessage());
+            error_log($exc->getMessage());
         }
 
         return $params;

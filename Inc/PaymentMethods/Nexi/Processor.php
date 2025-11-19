@@ -22,6 +22,7 @@ class Processor
 
         $order = $paymentInstance->order;
         $transaction = $paymentInstance->transaction;
+        $api_xpay_instance = NexiPaymentGateway::getInstance();
 
         try {
 
@@ -32,10 +33,17 @@ class Processor
                 $order->updateMeta('installments', sanitize_text_field($_REQUEST['nexi_xpay_number_of_installments']));
             } */
 
+            $data = $api_xpay_instance->get_payment_form($order, 'CC', false);
+
             $resultArray = [
-                'result' => 'success',
-                'redirect' => $transaction->getReceiptPageUrl(),
+                'nextAction' => 'nexi',
+                'actionName' => 'custom',
+                'status' => 'success',
+                'receipt_url' => $transaction->getReceiptPageUrl(),
+                'message' => __('Order has been placed successfully', PLUGIN),
             ];
+
+            $resultArray = array_merge($resultArray, $data);
 
             return $resultArray;
 

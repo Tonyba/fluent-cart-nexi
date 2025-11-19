@@ -78,7 +78,7 @@ class FC_3DS20_Data_Provider
                 $params['destinationNameIndicator'] = static::get3ds20CheckName($user, $billing_first_name, $billing_last_name);
             }
         } catch (Exception $exc) {
-            // Log::actionWarning($exc->getMessage());
+            error_log($exc->getMessage());
         }
 
         $fieldsGroups = array(

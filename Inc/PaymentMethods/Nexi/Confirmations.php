@@ -2,6 +2,7 @@
 
 namespace Inc\PaymentMethods\Nexi;
 
+use FluentCart\Api\StoreSettings;
 use Inc\Helpers\FC_Nexi_Helper;
 use FluentCart\App\Helpers\Status;
 
@@ -14,7 +15,7 @@ class Confirmations
             '/s2s/xpay/(?P<id>\d+)',
             array(
                 'methods' => 'POST',
-                'callback' => '\Inc\PaymentMethods\Confirmations::s2s',
+                'callback' => '\Inc\PaymentMethods\Nexi\Confirmations::s2s',
                 'args' => [
                     'id' => [],
                 ],
@@ -27,7 +28,7 @@ class Confirmations
             '/redirect/xpay/(?P<id>\d+)',
             array(
                 'methods' => array('GET', 'POST'),
-                'callback' => '\Inc\PaymentMethods\Confirmations::redirect',
+                'callback' => '\Inc\PaymentMethods\Nexi\Confirmations::redirect',
                 'args' => [
                     'id' => [],
                 ],
@@ -40,7 +41,7 @@ class Confirmations
             '/cancel/xpay/(?P<id>\d+)',
             array(
                 'methods' => 'GET',
-                'callback' => '\Inc\PaymentMethods\Confirmations::cancel',
+                'callback' => '\Inc\PaymentMethods\Nexi\Confirmations::cancel',
                 'args' => [
                     'id' => [],
                 ],
@@ -53,7 +54,7 @@ class Confirmations
             '/process_account/xpay' . '/(?P<id>\d+)',
             array(
                 'methods' => array('POST'),
-                'callback' => '\Inc\PaymentMethods\Confirmations::process_account',
+                'callback' => '\Inc\PaymentMethods\Nexi\Confirmations::process_account',
                 'args' => [
                     'id' => [],
                 ],
@@ -68,7 +69,7 @@ class Confirmations
                     '/gpay/redirect/(?P<id>\d+)',
                     array(
                         'methods' => 'GET',
-                        'callback' => '\Inc\PaymentMethods\Confirmations::gpayRedirect',
+                        'callback' => '\Inc\PaymentMethods\Nexi\Confirmations::gpayRedirect',
                         'args' => [
                             'id' => [],
                         ],
@@ -81,7 +82,7 @@ class Confirmations
                     '/xpay/gpay/result/(?P<id>\d+)',
                     array(
                         'methods' => 'GET',
-                        'callback' => '\Inc\PaymentMethods\Confirmations::xpayGpayResult',
+                        'callback' => '\Inc\PaymentMethods\Nexi\Confirmations::xpayGpayResult',
                         'args' => [
                             'id' => [],
                         ],
@@ -95,16 +96,17 @@ class Confirmations
         $params = $data->get_params();
         $order_id = $params["id"];
 
-        // Log::actionInfo(__FUNCTION__ . ": S2S notification for order id " . $order_id);
+        error_log(__FUNCTION__ . ": S2S notification for order id " . $order_id);
 
         $status = "500";
         $payload = array(
-            "outcome" => "KO",
+            "outcome" => "OK",
             "order_id" => $order_id,
         );
 
         try {
             if (FC_Nexi_Helper::validate_return_mac($_POST)) {
+
                 $order = \FluentCart\App\Models\Order::where('id', $order_id)->first();
 
                 if ($_POST['esito'] == "OK") {
@@ -149,6 +151,13 @@ class Confirmations
 
                     $order->updateMeta('_xpay_' . 'last_error', $_POST["messaggio"]);
 
+
+                    $order->addLog(
+                        'Payment error',
+                        $_POST["messaggio"],
+                        'error'
+                    );
+
                     //  $order->add_order_note(__('Payment error', 'woocommerce-gateway-nexi-xpay') . ": " . $_POST["messaggio"]);
 
                     $status = "200";
@@ -162,7 +171,7 @@ class Confirmations
             $order->updateMeta('_xpay_' . 'post_notification_timestamp', time());
 
         } catch (\Exception $exc) {
-            //  Log::actionInfo(__FUNCTION__ . ": " . $exc->getTraceAsString());
+            error_log(__FUNCTION__ . ": " . $exc->getMessage());
         }
 
         return new \WP_REST_Response($payload, $status, []);
@@ -180,7 +189,7 @@ class Confirmations
 
         //s2s not recived, so we need to update the order based the data recived in params
         if ($post_notification_timestamp == "") {
-            // Log::actionInfo(__FUNCTION__ . ": s2s notification for order id " . $order_id . " not recived, changing oreder status from request params");
+            error_log(__FUNCTION__ . ": s2s notification for order id " . $order_id . " not recived, changing oreder status from request params");
 
             if ($params['esito'] == "OK") {
                 if (!in_array($order->get_status(), [Status::ORDER_COMPLETED, Status::ORDER_PROCESSING])) {
@@ -211,24 +220,20 @@ class Confirmations
             }
         }
 
-        //  Log::actionInfo(__FUNCTION__ . ": user redirect for order id " . $order_id . ' - ' . (array_key_exists('esito', $params) ? $params['esito'] : ''));
+        error_log(__FUNCTION__ . ": user redirect for order id " . $order_id . ' - ' . (array_key_exists('esito', $params) ? $params['esito'] : ''));
 
         if ($order->payment_status == Status::PAYMENT_PENDING || $order->status == Status::ORDER_CANCELED) {
 
             $lastErrorXpay = $order->getMeta('_xpay_' . 'last_error', 'default');
 
             if ($lastErrorXpay != "") {
-                /* if (isset(WC()->session)) {
-                     wc_add_notice(__('Payment error, please try again', 'woocommerce-gateway-nexi-xpay') . " (" . htmlentities($lastErrorXpay) . ")", 'error');
-                 }*/
+                fluent_cart_add_log(__('Payment error, please try again', PLUGIN), " (" . htmlentities($lastErrorXpay) . ")", 'error', ['log_type' => 'payment']);
             }
 
             $paymentErrorXpay = $order->getMeta('_xpay_' . 'payment_error', 'default');
 
             if ($paymentErrorXpay != "") {
-                /* if (isset(WC()->session)) {
-                     wc_add_notice(htmlentities($paymentErrorXpay), 'error');
-                 }*/
+                fluent_cart_add_log(__('Payment error', PLUGIN), htmlentities($paymentErrorXpay), 'error', ['log_type' => 'payment']);
             }
 
             return new \WP_REST_Response(
@@ -266,7 +271,7 @@ class Confirmations
         return new \WP_REST_Response(
             "failed...",
             "303",
-            array("Location" => $order->getViewUrl())
+            array("Location" => (new StoreSettings())->getCartPage())
         );
     }
 
@@ -278,7 +283,7 @@ class Confirmations
             $order_id = $params["id"];
             $order = \FluentCart\App\Models\Order::where('id', $order_id)->first();
 
-            $amount = FC_Nexi_Helper::mul_bcmul($_POST['amount'], 100, 0);
+            $amount = FC_Nexi_Helper::mul_bcmul($_POST['amount'], 1, 0);
 
             if (!is_numeric($amount)) {
                 throw new \Exception(__('Invalid amount.', PLUGIN));
@@ -287,6 +292,12 @@ class Confirmations
             $codTrans = $order->getMeta('codTrans', 'default');
 
             if (empty($codTrans)) {
+                fluent_cart_add_log(
+                    sprintf(__('Unable to capture order %s', PLUGIN), $order_id),
+                    "Order does not have XPay capture reference.",
+                    'error',
+                    ['log_type' => 'payment']
+                );
                 throw new \Exception(sprintf(__('Unable to capture order %s. Order does not have XPay capture reference.', PLUGIN), $order_id));
             }
 

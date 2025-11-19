@@ -5156,13 +5156,13 @@ class FC_Nexi_Helper
 
         // Check on the response MAC
         if ($operation_info['mac'] != $MACrisposta) {
-            // Log::actionWarning(__FUNCTION__ . ": mac error: " . $operation_info["mac"] . " != " . $MACrisposta);
+            error_log(__FUNCTION__ . ": mac error: " . $operation_info["mac"] . " != " . $MACrisposta);
             throw new \Exception(__('Error in the calculation of the return MAC parameter', PLUGIN));
         }
 
         // Check on the outcome of the operation
         if ($operation_info['esito'] != 'OK') {
-            // Log::actionWarning(__FUNCTION__ . ": remote error: " . $operation_info['errore']['messaggio']);
+            error_log(__FUNCTION__ . ": remote error: " . $operation_info['errore']['messaggio']);
             throw new \Exception(__($operation_info['errore']['messaggio'], PLUGIN));
         }
 
@@ -5219,7 +5219,7 @@ class FC_Nexi_Helper
             return true;
         }
 
-        // Log::actionWarning(__FUNCTION__ . ": error: " . ($request_parameters["mac"] ?? '') . " != " . $mac);
+        error_log(__FUNCTION__ . ": mac error: " . ($request_parameters["mac"] ?? '') . " != " . $mac);
 
         return false;
     }
@@ -5227,7 +5227,16 @@ class FC_Nexi_Helper
     public static function get_xpay_available_methods()
     {
         $availableMethods = get_option('xpay_available_methods');
-        $availableMethods = isset($availableMethods) && $availableMethods != '[]' && !empty($availableMethods) ?? json_decode($availableMethods, true);
+
+        error_log('isset: ' . isset($availableMethods));
+        error_log('not arr empty' . $availableMethods != '[]');
+        error_log('not empty: ' . !empty($availableMethods));
+
+        $availableMethods = isset($availableMethods) &&
+            !empty($availableMethods) &&
+            $availableMethods != '[]'
+            ? json_decode($availableMethods, true) : '';
+
         return is_array($availableMethods) ? $availableMethods : [];
     }
 

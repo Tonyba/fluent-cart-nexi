@@ -96,7 +96,7 @@ class NexiPaymentGateway extends AbstractPaymentGateway
 
         // Check on the outcome
         if ($profile_info['esito'] != 'OK') {
-            Log::actionWarning(__FUNCTION__ . ": remote error: " . $profile_info['errore']['messaggio']);
+            error_log(__FUNCTION__ . ": remote error: " . $profile_info['errore']['messaggio']);
             throw new \Exception(__('Response OK', PLUGIN));
         }
 
@@ -109,7 +109,7 @@ class NexiPaymentGateway extends AbstractPaymentGateway
 
         // Check on response MAC
         if ($profile_info['mac'] != $MACrisposta) {
-            //   Log::actionWarning(__FUNCTION__ . ": error: " . $profile_info['mac'] . " != " . $MACrisposta);
+            error_log(__FUNCTION__ . ": mac error: " . $profile_info['mac'] . " != " . $MACrisposta);
             throw new \Exception(__('Mac verification failed', PLUGIN));
         }
 
@@ -125,7 +125,7 @@ class NexiPaymentGateway extends AbstractPaymentGateway
 
     public static function enable_apms()
     {
-        FC_Nexi_Helper::enable_payment_method(WC_SETTINGS_KEY);
+        FC_Nexi_Helper::enable_payment_method(FC_SETTINGS_KEY);
 
         foreach (FC_Nexi_Helper::get_xpay_available_methods() as $method) {
             if ($method['type'] === 'APM') {
@@ -140,7 +140,7 @@ class NexiPaymentGateway extends AbstractPaymentGateway
 
     public function get_payment_form($order, $selectedcard, $recurringPaymentRequired)
     {
-        $importo = FC_Nexi_Helper::mul_bcmul($order->total_amount, 100, 0);
+        $importo = FC_Nexi_Helper::mul_bcmul($order->total_amount, 1, 0);
         $chiaveSegreta = $this->nexi_xpay_mac;
 
         $customer = $order->customer;
@@ -153,7 +153,7 @@ class NexiPaymentGateway extends AbstractPaymentGateway
             'url' => get_rest_url(null, "fluent-cart-gateway-nexi-xpay/redirect/xpay/" . $order->id), //returning URL
             'url_back' => get_rest_url(null, "fluent-cart-gateway-nexi-xpay/cancel/xpay/" . $order->id), //cancel URL
             'languageId' => FC_Nexi_Helper::get_language_id(), //checkout page lang
-            'descrizione' => "Fluent Cart Order: " . $order->receipt_number,
+            'descrizione' => "FC Order: " . $order->id,
             'urlpost' => get_rest_url(null, "fluent-cart-gateway-nexi-xpay/s2s/xpay/" . $order->id), //S2S notification URL
             'selectedcard' => $selectedcard,
             'TCONTAB' => $this->nexi_accounting,
@@ -259,7 +259,7 @@ class NexiPaymentGateway extends AbstractPaymentGateway
             $params = array_merge($params, FC_Klarna_Data_Provider::calculate_params($order));
         }
 
-        \Nexi\OrderHelper::updateOrderMeta($order->get_id(), "_xpay_" . "codTrans", $params['codTrans']);
+        $order->updateMeta($order->id, "_xpay_" . "codTrans", $params['codTrans']);
 
         return array(
             "target_url" => $this->base_url . "ecomm/ecomm/DispatcherServlet",
@@ -325,6 +325,7 @@ class NexiPaymentGateway extends AbstractPaymentGateway
     public function boot()
     {
         // initialize any hanldere, webhook/ payment confirmation class if needed
+        (new Confirmations())->init();
     }
 
     #required: Return gateway metadata
@@ -378,10 +379,18 @@ class NexiPaymentGateway extends AbstractPaymentGateway
                 'value' => __('<br>For a correct behavior of the module, check in the configuration section of the Nexi back-office that the transaction cancellation in the event of a failed notification is set.
 A POST notification by the Nexi servers is sent to the following address, containing information on the outcome of the payment. <br>
                 <br>
-                ' . site_url() . '/wp-json/woocommerce-gateway-nexi-xpay/s2s/(xpay|npg)/(order id)
+                ' . site_url() . '/wp-json/fluent-cart-gateway-nexi-xpay/s2s/(xpay|npg)/(order id)
                 <br>    <br>
                 The notification is essential for the functioning of the plugin, it is therefore necessary that it is not blocked or filtered by the site infrastructure.
 ', PLUGIN)
+            ],
+            'payment_mode' => [
+                'type' => 'select',
+                'label' => __('Payment Mode', 'your-plugin'),
+                'options' => [
+                    ['value' => 'test', 'label' => __('Test', PLUGIN)],
+                    ['value' => 'production', 'label' => __('Production', PLUGIN)],
+                ],
             ],
             'nexi_alias' => [
                 'type' => 'text',
@@ -430,10 +439,24 @@ A POST notification by the Nexi servers is sent to the following address, contai
     // For a comprehensive guide on building gateway settings fields,
     // see the detailed documentation: [Payment Gateway Settings Fields](./payment_setting_fields.md)
 
+    public function get_xpay_cards_icon()
+    {
+        $img_list = "";
+
+        foreach (FC_Nexi_Helper::get_xpay_cards() as $am) {
+            $img_list .= '<div class="img-container"><img src="' . $am['pngImage'] . '" alt="' . $am['description'] . '"></div>';
+        }
+
+        if ($img_list != "") {
+            return '<div class="nexixpay-loghi-container flex"><div class="internal-container">' . $img_list . '</div></div>';
+        }
+
+        return "";
+    }
+
     #required: Get order information for frontend
     public function getOrderInfo(array $data)
     {
-        // Prepare frontend data for checkout
 
         $cart = CartHelper::getCart();
         $checkOutHelper = new CartCheckoutHelper(true);
@@ -456,17 +479,15 @@ A POST notification by the Nexi servers is sent to the following address, contai
             'mode' => $this->settings->getMode(),
         ];
 
-        $nexi_details = $this->get_payment_form($cart, 'CC', false);
+        // $nexi_details = $this->get_payment_form($cart, 'CC', false);
 
         $paymentDetails = [
             'mode' => 'payment',
-            'theme' => Arr::get($settings, 'paddle_checkout_theme', 'light'),
             'amount' => Helper::toDecimalWithoutComma($totalPrice),
             'currency' => strtoupper(CurrencySettings::get('currency')),
             'locale' => (new StoreSettings())->get('locale', 'en'),
+            'cards_fragment' => $this->get_xpay_cards_icon()
         ];
-
-        $paymentDetails['nexi_details'] = $nexi_details;
 
         // Return data for frontend
         wp_send_json([
