@@ -16,11 +16,9 @@ class NexiGatewaySettings extends BaseGatewaySettings
         parent::__construct();
         $settings = $this->getCachedSettings();
         $defaults = static::getDefaults();
-        $using_default = false;
 
         if (!$settings || !is_array($settings)) {
             $settings = $defaults;
-            $using_default = true;
         } else {
             $settings = wp_parse_args($settings, $defaults);
         }
@@ -32,11 +30,8 @@ class NexiGatewaySettings extends BaseGatewaySettings
         $this->settings = $settings;
         $this->setXPaySettings();
 
-        if (!$using_default) {
-            $xpay_instance = NexiPaymentGateway::getInstance();
-            $xpay_instance->get_profile_info();
-        }
-
+        $xpay_instance = NexiPaymentGateway::getInstance();
+        $xpay_instance = $xpay_instance->get_profile_info();
     }
 
     public static function getDefaults()
