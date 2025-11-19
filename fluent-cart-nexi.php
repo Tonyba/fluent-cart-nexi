@@ -2,7 +2,7 @@
 /*
 Plugin Name: FluentCart Nexi
 Description: A plugin i made for nexi payment gateway integration with Fluent Cart
-Version: 0.0.1
+Version: 0.1.0
 Author: Anthony
 Text Domain: fluent-cart-nexi
 Requires PHP: 8.2

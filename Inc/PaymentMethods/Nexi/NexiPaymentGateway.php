@@ -342,7 +342,7 @@ class NexiPaymentGateway extends AbstractPaymentGateway
             'supported_features' => $this->supportedFeatures,
             'brand_color' => 'red',
             'upcoming' => false,
-            'tag' => 'developing'
+            'tag' => 'alpha'
         ];
     }
 

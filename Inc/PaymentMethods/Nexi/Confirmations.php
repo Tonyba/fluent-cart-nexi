@@ -189,7 +189,7 @@ class Confirmations
 
         //s2s not recived, so we need to update the order based the data recived in params
         if ($post_notification_timestamp == "") {
-            error_log(__FUNCTION__ . ": s2s notification for order id " . $order_id . " not recived, changing oreder status from request params");
+            error_log(__FUNCTION__ . ": s2s notification for order id " . $order_id . " not received, changing order status from request params");
 
             if ($params['esito'] == "OK") {
                 if (!in_array($order->get_status(), [Status::ORDER_COMPLETED, Status::ORDER_PROCESSING])) {
