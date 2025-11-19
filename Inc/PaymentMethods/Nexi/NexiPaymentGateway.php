@@ -479,8 +479,6 @@ A POST notification by the Nexi servers is sent to the following address, contai
             'mode' => $this->settings->getMode(),
         ];
 
-        // $nexi_details = $this->get_payment_form($cart, 'CC', false);
-
         $paymentDetails = [
             'mode' => 'payment',
             'amount' => Helper::toDecimalWithoutComma($totalPrice),
