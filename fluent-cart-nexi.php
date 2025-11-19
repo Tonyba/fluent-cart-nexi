@@ -1,6 +1,6 @@
 <?php
 /*
-Plugin Name: Fluent Cart Nexi
+Plugin Name: FluentCart Nexi
 Description: A plugin i made for nexi payment gateway integration with Fluent Cart
 Version: 0.0.1
 Author: Anthony

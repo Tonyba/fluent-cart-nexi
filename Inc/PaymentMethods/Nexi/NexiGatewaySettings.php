@@ -125,12 +125,12 @@ class NexiGatewaySettings extends BaseGatewaySettings
         $currentConfig = [];
         $currentConfig["nexi_xpay_alias"] = $this->settings["nexi_alias"];
         $currentConfig["nexi_xpay_mac"] = $this->settings["nexi_mac"];
-
         $currentConfig["nexi_xpay_test_mode"] = $this->settings["payment_mode"];
-
         $currentConfig["nexi_xpay_accounting"] = $this->settings["nexi_accounting"];
-
         $currentConfig["nexi_xpay_oneclick_enabled"] = $this->settings["nexi_oneclick_enabled"];
+        $currentConfig["nexi_xpay_3ds20_enabled"] = $this->settings["nexi_xpay_3ds20_enabled"];
+        $currentConfig["nexi_gateway"] = GATEWAY_XPAY;
+        $currentConfig["integration_type"] = $this->settings["integration_type"];
 
         // SUBSCRIPTIONS KEYS
 
@@ -139,7 +139,6 @@ class NexiGatewaySettings extends BaseGatewaySettings
           $currentConfig["nexi_xpay_recurring_mac"] = $currentConfig["cartasi_mac_rico"];
           $currentConfig["nexi_xpay_group"] = $currentConfig["gruppo_rico"];*/
 
-        $currentConfig["nexi_xpay_3ds20_enabled"] = $this->settings["nexi_oneclick_enabled"];
 
 
         update_option(FC_SETTINGS_KEY, $currentConfig);

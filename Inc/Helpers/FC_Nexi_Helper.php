@@ -2,6 +2,8 @@
 
 namespace Inc\Helpers;
 
+use Inc\PaymentMethods\Nexi\NexiPaymentGateway;
+
 
 class FC_Nexi_Helper
 {
@@ -99,7 +101,8 @@ class FC_Nexi_Helper
 
     public static function nexi_is_gateway_NPG()
     {
-        return false;
+        $config = self::getXPaySettings();
+        return static::nexi_array_key_exists_and_equals($config, 'nexi_gateway', GATEWAY_NPG);
     }
 
     public static function iso3166_getAlpha3($alpha2)
@@ -5063,6 +5066,188 @@ class FC_Nexi_Helper
         return self::get_nexi_settings();
     }
 
+    public static function enable_payment_method($key)
+    {
+        $config = get_option($key, []);
+
+        if (!isset($config) || !isset($config['enabled'])) {
+            $config['enabled'] = 'yes';
+        }
+
+        update_option($key, $config);
+    }
+
+    public static function saveSuccessXPay($order, $alias, $num_contratto, $codTrans, $scadenza_pan)
+    {
+        $metaPrefix = '_xpay_';
+        $order->deleteMeta($metaPrefix . 'last_error');
+
+        /*  if (
+              function_exists("wcs_is_subscription") && wcs_is_subscription($order_id) ||
+              (function_exists("wcs_order_contains_subscription") &&
+                  (wcs_order_contains_subscription($order_id) || wcs_order_contains_renewal($order_id))
+              )
+          ) {
+              if (get_option("woocommerce_subscriptions_turn_off_automatic_payments") !== "yes") {
+
+                  $subscriptions = wcs_get_subscriptions_for_order($order_id);
+                  foreach ($subscriptions as $subscription) {
+
+                      \Nexi\Log::actionDebug("xpay subscription: " . json_encode($subscription));
+
+                      $subscription_id = $subscription->get_id();
+
+                      \Nexi\OrderHelper::updateOrderMeta($subscription_id, $metaPrefix . "alias", $alias);
+                      \Nexi\OrderHelper::updateOrderMeta($subscription_id, $metaPrefix . "num_contratto", $num_contratto);
+                      \Nexi\OrderHelper::updateOrderMeta($subscription_id, $metaPrefix . "codTrans", $codTrans);
+                      \Nexi\OrderHelper::updateOrderMeta($subscription_id, $metaPrefix . "scadenza_pan", $scadenza_pan);
+
+                  }
+              }
+          }*/
+
+        $order->updateMeta($metaPrefix . 'alias', $alias);
+        $order->updateMeta($metaPrefix . 'num_contratto', $num_contratto);
+        $order->updateMeta($metaPrefix . 'codTrans', $codTrans);
+        $order->updateMeta($metaPrefix . 'scadenza_pan', $codTrans);
+    }
+
+
+    public static function account($cod_trans, $amount, $currency)
+    {
+        $xpay_instance = NexiPaymentGateway::getInstance();
+        $settings = $xpay_instance->settings;
+
+        $apiKey = $settings->getNexiAlias();
+        $chiaveSegreta = $settings->getNexiMac();
+
+        /* if (self::is_recurring($cod_trans)) {
+             $apiKey = $this->nexi_xpay_recurring_alias;
+             $chiaveSegreta = $this->nexi_xpay_recurring_mac;
+         }*/
+
+        $divisa = array(
+            'EUR' => '978',
+            'CZK' => '203',
+            'PLN' => '985',
+            'AUD' => '036',
+            'NZD' => '554'
+        )[$currency];
+
+        $timeStamp = (time()) * 1000;
+
+        //  MAC calculation
+        $mac = sha1('apiKey=' . $apiKey . 'codiceTransazione=' . $cod_trans . 'divisa=' . $divisa . 'importo=' . $amount . 'timeStamp=' . $timeStamp . $chiaveSegreta);
+
+        // Params
+        $payload = array(
+            // Mandatory
+            'apiKey' => $apiKey,
+            'codiceTransazione' => $cod_trans,
+            'importo' => $amount,
+            'divisa' => $divisa,
+            'timeStamp' => $timeStamp,
+            'mac' => $mac,
+        );
+
+        $operation_info = self::helper_exec_json($settings, "ecomm/api/bo/contabilizza", $payload);
+
+        $MACrisposta = sha1('esito=' . $operation_info['esito'] . 'idOperazione=' . $operation_info['idOperazione'] . 'timeStamp=' . $operation_info['timeStamp'] . $chiaveSegreta);
+
+        // Check on the response MAC
+        if ($operation_info['mac'] != $MACrisposta) {
+            // Log::actionWarning(__FUNCTION__ . ": mac error: " . $operation_info["mac"] . " != " . $MACrisposta);
+            throw new \Exception(__('Error in the calculation of the return MAC parameter', PLUGIN));
+        }
+
+        // Check on the outcome of the operation
+        if ($operation_info['esito'] != 'OK') {
+            // Log::actionWarning(__FUNCTION__ . ": remote error: " . $operation_info['errore']['messaggio']);
+            throw new \Exception(__($operation_info['errore']['messaggio'], PLUGIN));
+        }
+
+        return true;
+    }
+
+    private static function helper_exec_json($settings, $path, $payload)
+    {
+        $connection = curl_init();
+
+        if (!$connection) {
+            throw new \Exception(__('Can\'t connect!', PLUGIN));
+        }
+
+        curl_setopt_array($connection, array(
+            CURLOPT_URL => $settings->getBaseURL() . $path,
+            CURLOPT_HTTPHEADER => array('Content-Type: application/json'),
+            CURLOPT_POST => 1,
+            CURLOPT_POSTFIELDS => json_encode($payload),
+            CURLOPT_RETURNTRANSFER => 1,
+            CURLINFO_HEADER_OUT => true
+        ));
+
+        $response = curl_exec($connection);
+        if ($response == false) {
+            throw new \Exception(sprintf(__('CURL exec error: %s', PLUGIN), curl_error($connection)));
+        }
+        curl_close($connection);
+
+        $payment_data = json_decode($response, true);
+
+        if (!(is_array($payment_data) && json_last_error() === JSON_ERROR_NONE)) {
+            throw new \Exception(__('JSON error', PLUGIN));
+        }
+
+        return $payment_data;
+    }
+
+
+    public static function validate_return_mac($request_parameters)
+    {
+        $config = self::getXPaySettings();
+
+        $mac = sha1('codTrans=' . ($request_parameters['codTrans'] ?? '') .
+            'esito=' . ($request_parameters['esito'] ?? '') .
+            'importo=' . ($request_parameters['importo'] ?? '') .
+            'divisa=' . ($request_parameters['divisa'] ?? '') .
+            'data=' . ($request_parameters['data'] ?? '') .
+            'orario=' . ($request_parameters['orario'] ?? '') .
+            'codAut=' . ($request_parameters['codAut'] ?? '') .
+            $config['nexi_xpay_mac']);
+
+        if ($mac == ($request_parameters["mac"] ?? '')) {
+            return true;
+        }
+
+        // Log::actionWarning(__FUNCTION__ . ": error: " . ($request_parameters["mac"] ?? '') . " != " . $mac);
+
+        return false;
+    }
+
+    public static function get_xpay_available_methods()
+    {
+        $availableMethods = get_option('xpay_available_methods');
+        $availableMethods = isset($availableMethods) && $availableMethods != '[]' && !empty($availableMethods) ?? json_decode($availableMethods, true);
+        return is_array($availableMethods) ? $availableMethods : [];
+    }
+
+
+    public static function is_nexi_build()
+    {
+        $config = self::getXPaySettings();
+        return static::nexi_array_key_exists_and_equals($config, 'integration_type', 'build');
+    }
+
+    public static function nexi_array_key_exists_and_equals($array, $key, $value)
+    {
+        return static::nexi_array_key_exists($array, $key) && $array[$key] == $value;
+    }
+
+    public static function nexi_array_key_exists($array, $key)
+    {
+        return isset($array) && is_array($array) && array_key_exists($key, $array);
+    }
+
 
     public static function get_nexi_settings()
     {
@@ -5076,6 +5261,35 @@ class FC_Nexi_Helper
         }
 
         return $config;
+    }
+
+    public static function get_xpay_cards()
+    {
+        $availableMethods = self::get_xpay_available_methods();
+
+        $cards = [
+            'MASTERCARD',
+            'MAESTRO',
+            'VISA',
+            'AMEX',
+            'JCB',
+            'UPI',
+            'DINERS',
+        ];
+
+        foreach ($availableMethods as $i => $availableMethod) {
+            if ($availableMethod['type'] === 'CC') {
+                $order = array_search($availableMethod['code'], $cards);
+
+                $availableMethods[$i]['order'] = $order !== false ? $order : 100;
+            } else {
+                unset($availableMethods[$i]);
+            }
+        }
+
+        array_multisort(array_column($availableMethods, 'order'), SORT_ASC, array_column($availableMethods, 'description'), SORT_ASC, $availableMethods);
+
+        return $availableMethods;
     }
 
     public static function get_customer_id_by_user_id($user_id)

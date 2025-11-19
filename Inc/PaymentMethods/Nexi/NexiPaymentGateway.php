@@ -2,6 +2,12 @@
 
 namespace Inc\PaymentMethods\Nexi;
 
+use FluentCart\Api\CurrencySettings;
+use FluentCart\Api\StoreSettings;
+use FluentCart\App\Helpers\CartCheckoutHelper;
+use FluentCart\App\Helpers\CartHelper;
+use FluentCart\App\Helpers\Helper;
+use FluentCart\App\Hooks\Cart\WebCheckoutHandler;
 use FluentCart\App\Modules\PaymentMethods\Core\AbstractPaymentGateway;
 use FluentCart\App\Services\Payments\PaymentInstance;
 use FluentCart\Framework\Support\Arr;
@@ -15,6 +21,21 @@ use Inc\Helpers\FC_Nexi_Helper;
 
 class NexiPaymentGateway extends AbstractPaymentGateway
 {
+
+    private static $instance = null;
+
+    /**
+     *
+     * @return \Inc\PaymentMethods\Nexi\NexiPaymentGateway
+     */
+    public static function getInstance()
+    {
+        if (self::$instance == null) {
+            self::$instance = new static();
+        }
+
+        return self::$instance;
+    }
 
     // Define supported features
     public array $supportedFeatures = [
@@ -47,9 +68,9 @@ class NexiPaymentGateway extends AbstractPaymentGateway
     public function get_profile_info()
     {
         if (strlen($this->nexi_xpay_alias) == 0 || strlen($this->nexi_xpay_mac) == 0) {
-            /*    delete_option('xpay_available_methods');
-                delete_option('xpay_logo_small');
-                delete_option('xpay_logo_large');*/
+            delete_option('xpay_available_methods');
+            delete_option('xpay_logo_small');
+            delete_option('xpay_logo_large');
             return null;
         }
 
@@ -92,28 +113,30 @@ class NexiPaymentGateway extends AbstractPaymentGateway
             throw new \Exception(__('Mac verification failed', PLUGIN));
         }
 
-        //update_option('xpay_available_methods', json_encode($profile_info['availableMethods']));
+        update_option('xpay_available_methods', json_encode($profile_info['availableMethods']));
+        update_option('xpay_logo_small', $profile_info['urlLogoNexiSmall']);
+        update_option('xpay_logo_large', $profile_info['urlLogoNexiLarge']);
 
 
-        //self::enable_apms();
+        self::enable_apms();
 
         return $profile_info;
     }
 
-    /*  public static function enable_apms()
-     {
-         \Nexi\WC_Nexi_Helper::enable_payment_method(WC_SETTINGS_KEY);
+    public static function enable_apms()
+    {
+        FC_Nexi_Helper::enable_payment_method(WC_SETTINGS_KEY);
 
-         foreach (\Nexi\WC_Nexi_Helper::get_xpay_available_methods() as $method) {
-             if ($method['type'] === 'APM') {
-                 \Nexi\WC_Nexi_Helper::enable_payment_method("woocommerce_xpay_" . $method['selectedcard'] . "_settings");
+        foreach (FC_Nexi_Helper::get_xpay_available_methods() as $method) {
+            if ($method['type'] === 'APM') {
+                FC_Nexi_Helper::enable_payment_method("fluentcart_xpay_" . $method['selectedcard'] . "_settings");
 
-                 if (in_array(strtolower($method['selectedcard']), ['googlepay', 'applepay'])) {
-                     \Nexi\WC_Nexi_Helper::enable_payment_method("woocommerce_xpay_" . $method['selectedcard'] . "_button_settings");
-                 }
-             }
-         }
-     } */
+                if (in_array(strtolower($method['selectedcard']), ['googlepay', 'applepay'])) {
+                    FC_Nexi_Helper::enable_payment_method("fluentcart_xpay_" . $method['selectedcard'] . "_button_settings");
+                }
+            }
+        }
+    }
 
     public function get_payment_form($order, $selectedcard, $recurringPaymentRequired)
     {
@@ -332,6 +355,7 @@ class NexiPaymentGateway extends AbstractPaymentGateway
     public function makePaymentFromPaymentInstance(PaymentInstance $paymentInstance)
     {
         // Your payment processing logic here
+        return (new Processor())->handleSinglePayment($paymentInstance);
 
     }
 
@@ -410,13 +434,47 @@ A POST notification by the Nexi servers is sent to the following address, contai
     public function getOrderInfo(array $data)
     {
         // Prepare frontend data for checkout
-        $paymentArgs = [];
+
+        $cart = CartHelper::getCart();
+        $checkOutHelper = new CartCheckoutHelper(true);
+        $shippingChargeData = (new WebCheckoutHandler())->getShippingChargeData($cart);
+        $shippingCharge = Arr::get($shippingChargeData, 'charge');
+        $totalPrice = $checkOutHelper->getItemsAmountTotal(false) + $shippingCharge;
+
+        $items = $checkOutHelper->getItems();
+
+        $hasSubscription = $this->validateSubscriptions($items);
+
+        $subTotal = 0;
+        foreach ($items as $item) {
+            $subTotal += intval($item['quantity'] * $item['unit_price']);
+        }
+
+        $settings = $this->settings->get();
+
+        $paymentArgs = [
+            'mode' => $this->settings->getMode(),
+        ];
+
+        $nexi_details = $this->get_payment_form($cart, 'CC', false);
+
+        $paymentDetails = [
+            'mode' => 'payment',
+            'theme' => Arr::get($settings, 'paddle_checkout_theme', 'light'),
+            'amount' => Helper::toDecimalWithoutComma($totalPrice),
+            'currency' => strtoupper(CurrencySettings::get('currency')),
+            'locale' => (new StoreSettings())->get('locale', 'en'),
+        ];
+
+        $paymentDetails['nexi_details'] = $nexi_details;
 
         // Return data for frontend
         wp_send_json([
             'status' => 'success',
+            'intent' => $paymentDetails,
             'payment_args' => $paymentArgs,
-            'message' => __('Order info retrieved', Plugin)
+            'has_subscription' => $hasSubscription,
+            'message' => __('Order info retrieved', PLUGIN)
         ], 200);
     }
 
@@ -427,16 +485,11 @@ A POST notification by the Nexi servers is sent to the following address, contai
         // $gatewayLibUrl = 'https://js.yourgateway.com/v1/checkout.js';
 
         return [
-            /*     [
-                     'handle' => 'your-gateway-external-lib',
-                     'src' => $gatewayLibUrl,
-                 ],
-                 [
-                     'handle' => 'fluent-cart-your-gateway-checkout',
-                     'src' => plugin_dir_url(__FILE__) . 'assets/js/your-gateway-checkout.js',
-                     'deps' => ['your-gateway-external-lib'],
-                     'version' => FLUENTCART_PLUGIN_VERSION
-                 ]*/
+            [
+                'handle' => 'fluent-cart-your-gateway-checkout',
+                'src' => PLUGIN_URL . 'assets/js/nexi-checkout.js',
+                'version' => PLUGIN_VER
+            ]
         ];
     }
 

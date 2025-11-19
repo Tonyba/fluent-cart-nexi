@@ -18,7 +18,7 @@ class FC_3DS20_Data_Provider
         $shipping_full_name = explode(' ', $shipping_address->name);
 
         $billing_email = $billing_address->email;
-        $billing_phone = '';
+        $billing_phone = $order->customer->phone;
         $billing_first_name = $billing_full_name[0];
         $billing_last_name = $billing_full_name[1];
         $billing_address_1 = $billing_address->address_1;

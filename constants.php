@@ -4,10 +4,15 @@ if (!defined('ABSPATH')) {
     die;
 }
 
+$plugins = get_plugins();
+
+
+$plugin_name = explode('/', plugin_basename(__FILE__))[0];
+
 define('PLUGIN_PATH', plugin_dir_path(__FILE__));
 define('PLUGIN_URL', plugin_dir_url(__FILE__));
-define('PLUGIN', plugin_basename(__FILE__));
-define('PLUGIN_VER', '0.0.1');
+define('PLUGIN', $plugin_name);
+define('PLUGIN_VER', $plugins["$plugin_name/$plugin_name.php"]["Version"]);
 
 define('FC_SETTINGS_KEY', 'fluent_cart_xpay_settings');
 define("GATEWAY_XPAY", "xpay");
@@ -57,5 +62,4 @@ define('NPG_CARD_SUBSTITUTION', 'CARD_SUBSTITUTION');
 define('NPG_RT_MIT_UNSCHEDULED', 'MIT_UNSCHEDULED');
 
 
-$plugins = get_plugins();
 define("FLUENTCART_GATEWAY_NEXI_VERSION", $plugins["fluent-cart/fluent-cart.php"]["Version"]);
