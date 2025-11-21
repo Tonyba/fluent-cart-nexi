@@ -63,6 +63,8 @@ class NexiPaymentGateway extends AbstractPaymentGateway
         $this->nexi_accounting = $this->settings->get('nexi_accounting');
         $this->base_url = $this->settings->getBaseURL();
         $this->nexi_xpay_3ds20_enabled = $this->settings->is3ds20Enabled();
+
+        $this->get_profile_info();
     }
 
     public function get_profile_info()
@@ -325,7 +327,7 @@ class NexiPaymentGateway extends AbstractPaymentGateway
     public function boot()
     {
         // initialize any hanldere, webhook/ payment confirmation class if needed
-        (new Confirmations())->init();
+        //  (new Confirmations())->init();
     }
 
     #required: Return gateway metadata

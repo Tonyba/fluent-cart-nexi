@@ -29,9 +29,6 @@ class NexiGatewaySettings extends BaseGatewaySettings
 
         $this->settings = $settings;
         $this->setXPaySettings();
-
-        $xpay_instance = NexiPaymentGateway::getInstance();
-        $xpay_instance = $xpay_instance->get_profile_info();
     }
 
     public static function getDefaults()
