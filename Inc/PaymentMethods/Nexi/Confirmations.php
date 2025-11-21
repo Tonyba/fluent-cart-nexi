@@ -10,6 +10,11 @@ class Confirmations
 {
     public function init()
     {
+        add_action('rest_api_init', [$this, 'register_routes']);
+    }
+
+    public function register_routes()
+    {
         register_rest_route(
             'fluent-cart-gateway-nexi-xpay',
             '/s2s/xpay/(?P<id>\d+)',
